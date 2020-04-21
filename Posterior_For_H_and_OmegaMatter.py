@@ -55,7 +55,7 @@ l_l=min(L)
 l_u=max(L)
 ce_fs, ce_asd , et_asd, aligo_asd = np.loadtxt('Amplitude_of_Noise_Spectral_Density.txt', usecols=[0,3,2,1],unpack = True)
 
-Rho_Th=10.5
+Rho_Th=0.0
 # correct units
 c=G=1
 c1=3.0e8
@@ -71,12 +71,9 @@ def Draw_true(m10,m20,Lambda,dLambda,cosmo,z_max,z_peak):
     z=np.random.beta(3,beta+1)*z_Max
     
 #COnly draw values within interpolation range    
-    while True:
-        m2=m1=np.exp(np.random.normal(np.log(m10),sm1/m10))
-        
-        if(m1<m_u and m2<m_u and m1>m_l and m2>m_l):
-            break
-    
+   
+    m1=m10
+    m2=m20
     M=m1+m2
     Mz=M*(1.+z)
     
@@ -192,21 +189,21 @@ def choose(S,A):
     return S[A]
 
 #Likelihood of H0 and Omega_m obtained by Integrating L(z,DL)*delta(DL-DL(z,H0,Omegam))*p(z)
-def Likelihood(H,O,Z_dat,DL_dat,NN):
+def Likelihood(H,O,kerr,NN):
     
     n=100
     L=0.0
     Z=np.linspace(0.0001,10.0,n)
     DL=np.array([np.log(FlatLambdaCDM(H,O).luminosity_distance(z).value) for z in Z] )
-    
+    Sel=np.array([P_det(Z[k],DL[k]) for k in range(len(Z))])
     
     for j in range(NN):
         
         
-        Kernel=kernel(Z_dat,DL_dat,j)
+        Kernel=kerr[j]
         
         
-        Integrand=np.array([choose(Kernel.pdf([Z[k],DL[k]]),0)*p(Z[k]) for k in range(len(Z))])
+        Integrand=np.array([choose(Kernel.pdf([Z[k],DL[k]]),0)*p(Z[k])/Sel[k] for k in range(len(Z))])
         s=np.trapz(Integrand,Z)
      
         L+=np.log(s)
@@ -225,7 +222,7 @@ HN1=10
 HN2=100
 H1=np.linspace(Hmin,Hmax,HN1)
 H2=np.linspace(Hmin,Hmax,HN2)
-
+Kerr=[]
 #Draw Values for N events
 for i in range(0,N):
 #Introduce SNR Bias    
@@ -239,20 +236,20 @@ for i in range(0,N):
     f0=lambda x: z_measured(Mc_z[x],Lambdat[x],eta[x])
     
     Z_dat.append([f0(k) for k in range(len(Mc_z))])
-    if(z_max<max(Z_dat[i])):
-        z_max=max(Z_dat[i])
-    DL_dat.append(np.log(deff*np.random.beta(2,4,len(deff))/Mpc))
     
-    Z_tr.append(z_true)
+    DL_dat.append(np.log(deff*np.random.beta(2,4,len(deff))/Mpc))
+    Kerr.append(kernel(Z_dat,DL_dat,i))
+    
+    
 
 #Interpolate Likelihood
-L_h=lambda x: Likelihood(x,0.2736,Z_dat,DL_dat,N)
+L_h=lambda x: Likelihood(x,0.2736,Kerr,N)
 
 Lh=np.array([L_h(h) for h in H1])
 Lh=np.exp(Lh-max(Lh))
 
 f=interpolate.interp1d(H1,Lh,kind='cubic')
-Lh=np.array([f(h)/(P_det_H(h,0.2736)**N) for h in H2])
+Lh=np.array([f(h) for h in H2])
 
 Lh=Lh/max(Lh)
 
@@ -261,5 +258,3 @@ Lh=Lh/max(Lh)
 ppl.plot(H2,Lh)
 ppl.axvline(x=70.5)
 ppl.show()
-
-
