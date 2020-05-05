@@ -28,7 +28,7 @@ from scipy.special import erfc
 #from Selection import P_det_H0
 from joblib import Parallel, delayed
 import multiprocessing
-
+import math
 """ Geometricised Units; c=G=1, Mass[1500 meter/Solar Mass], Distance[meter], Time[3.0e8 meter/second]"""
 
 """Parameters: (ln Mc_z, ln(Lambda),tc,Phi_c,ln d)"""
@@ -55,7 +55,7 @@ l_l=min(L)
 l_u=max(L)
 ce_fs, ce_asd , et_asd, aligo_asd = np.loadtxt('Amplitude_of_Noise_Spectral_Density.txt', usecols=[0,3,2,1],unpack = True)
 
-Rho_Th=0.0
+Rho_Th=8.0
 # correct units
 c=G=1
 c1=3.0e8
@@ -71,7 +71,6 @@ def Draw_true(m10,m20,Lambda,dLambda,cosmo,z_max,z_peak):
     z=np.random.beta(3,beta+1)*z_Max
     
 #COnly draw values within interpolation range    
-   
     m1=m10
     m2=m20
     M=m1+m2
@@ -81,7 +80,6 @@ def Draw_true(m10,m20,Lambda,dLambda,cosmo,z_max,z_peak):
     tc=np.random.uniform(0,1)
     eta=m1*m2/M**2
     Mc_z=Mz*eta**0.6
-    
     
     d_l=cosmo.luminosity_distance(z)
     
@@ -114,24 +112,20 @@ def Draw_Measured(Mc_z,eta,Lambdat,deff,Th,z_true):
                  Lambdat=np.exp(Lambdat)
                  deff=np.exp(deff)
                  eta=np.exp(eta)
-                 
-                 
                  Lambda=Lambdat/((1.+7.*eta - 31.*eta**2)*16./13.)
                  h=0.1*Lambda
-                 
                  if(Lambda<(max(L)-h) and Lambda>(min(L)+h)):
                          break
          X1.append(Mc_z)
          X2.append(eta)
          X3.append(Lambdat)
          X4.append(deff)
-         
+
      Mc_z=np.array(X1)
      eta=np.array(X2)
      Lambdat=np.array(X3)
      deff=np.array(X4)
      Th=(np.random.beta(2,4))
-     
      Th=np.random.beta(2,4)
      return Mc_z, eta, Lambdat, deff, Th
 
@@ -139,9 +133,6 @@ def Draw_Measured(Mc_z,eta,Lambdat,deff,Th,z_true):
 def z_measured(Mc_z,Lambdat,eta):
     Lambda=Lambdat/((1.+7.*eta - 31.*eta**2)*16./13.)
     m_measured=mass(Lambda)
-    
-    
-    
     M_z=Mc_z/eta**(0.6)
     z_measured=M_z/(2.*m_measured) -1.
     return z_measured
@@ -149,13 +140,8 @@ def z_measured(Mc_z,Lambdat,eta):
 
 #Use KDE to compute marginalized Quasi-Likelihood L(z,DL)
 def kernel(Z,DL,i):
-    
     Dat=np.vstack([Z[i],DL[i]])
-    
     f=stats.gaussian_kde(Dat)
-    
-    
-    
     return f
 
 
@@ -165,23 +151,37 @@ def p(z):
     return u**2*(1.-u)**9/(special.beta(3,9)*10.)
 
 #Selection Function
+#def P_det(z,DL):
+#    m1=m1_SLY
+#    eta=0.25
+#    Lambdat=1.
+#    Mc_z=2.*m1*eta**0.6
+#    deff=np.exp(DL)*Mpc
+#    y=erfc((Rho_Th-SNR(Mc_z,eta,Lambdat,1.,1.,deff,ce_fs,ce_asd)**0.5)/2.**0.25)
+#    
+#    return y
+
+AA = 1.93
+BB = 3.93
+from scipy.special import erf
 def P_det(z,DL):
     m1=m1_SLY
     eta=0.25
     Lambdat=1.
     Mc_z=2.*m1*eta**0.6
     deff=np.exp(DL)*Mpc
-    y=erfc((Rho_Th-SNR(Mc_z,eta,Lambdat,1.,1.,deff,ce_fs,ce_asd)**0.5)/2.**0.25)
-    
-    return y
+    rho_optimal = SNR(Mc_z,eta,Lambdat,1.,1.,deff,ce_fs,ce_asd)
+    w = Rho_Th/rho_optimal
+    num = erf(AA-BB*w) - erf(AA-BB)
+    den = erf(AA) - erf(AA-BB)
+    return num/den
 
 #Selection Function for H0 and Omega_m obtained by integrating P_det(Z,DL)*delta(DL-DL(z,H0,Omegam))*p(z)
 def P_det_H(H,O):
     n=100
-    
     Z=np.linspace(0.0001,10.0,n)
     DL=np.array([np.log(FlatLambdaCDM(H,O).luminosity_distance(z).value) for z in Z] )
-    Sel=np.array([P_det(Z[k],DL[k])*p(Z[k]) for k in range(len(Z))])
+    Sel=np.array([P_det(Z[k],DL[k]) for k in range(len(Z))])
     Sel=np.trapz(Sel,Z)
     return Sel
 
@@ -190,7 +190,6 @@ def choose(S,A):
 
 #Likelihood of H0 and Omega_m obtained by Integrating L(z,DL)*delta(DL-DL(z,H0,Omegam))*p(z)
 def Likelihood(H,O,kerr,NN):
-    
     n=100
     L=0.0
     Z=np.linspace(0.0001,10.0,n)
@@ -198,22 +197,21 @@ def Likelihood(H,O,kerr,NN):
     Sel=np.array([P_det(Z[k],DL[k]) for k in range(len(Z))])
     
     for j in range(NN):
-        
-        
         Kernel=kerr[j]
-        
-        
         Integrand=np.array([choose(Kernel.pdf([Z[k],DL[k]]),0)*p(Z[k])/Sel[k] for k in range(len(Z))])
         s=np.trapz(Integrand,Z)
-     
-        L+=np.log(s)
-    
+        ss = np.log(s)
+        print(ss)
+        if math.isnan(ss) is True:
+            continue
+        else:
+            L+=ss
     return(L)
     
 #Draw Values for each Event
 Z_dat=[]
 DL_dat=[]
-N=50
+N=1000
 z_max=0.0
 Z_tr=[]
 Hmin=60.
@@ -252,9 +250,9 @@ f=interpolate.interp1d(H1,Lh,kind='cubic')
 Lh=np.array([f(h) for h in H2])
 
 Lh=Lh/max(Lh)
-
+print(Lh)
 
 #Plot
 ppl.plot(H2,Lh)
 ppl.axvline(x=70.5)
-ppl.show()
+ppl.savefig('blah.pdf')
