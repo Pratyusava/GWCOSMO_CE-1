@@ -53,7 +53,7 @@ PN_order=3.5
 dl_dM_AP4=(2.767936e+02-1.891455e+02 )/(( 1.388857  -1.473573)*1500.*2.)
 
 # load noise amplitude spectral density files
-ce_fs, ce_asd , et_asd, aligo_asd = np.loadtxt('CE.txt', usecols=[0,3,2,1],unpack = True)
+ce_fs, ce_asd , et_asd, aligo_asd = np.loadtxt('Amplitude_of_Noise_Spectral_Density.txt', usecols=[0,3,2,1],unpack = True)
 
 # correct units
 c=G=1
@@ -166,19 +166,19 @@ def Uncertainty(m1,m2,Lambda,dLambda,z,tc,phc,f1,Sh,cosmo):
 
     dz=(Sigma[0,0]**0.5+abs(Sigma[1,1])**0.5*Lambda/(abs(dLambda)*(m1+m2)))*(1.+z)/z
     
-    
+    print(z,dz)
     return(dz)
             
         
-        
-Sigma1_CE=np.array([Uncertainty(m1_AP4,m2_AP4,Lambda_AP4,dl_dM_AP4,z,1.,1.,ce_fs,ce_asd,cosmo) for z in Z])
+#Plot        
+Sigma1_ET=np.array([Uncertainty(m1_SLY,m2_SLY,Lambda_SLY,dl_dM_SLY,z,1.,1.,ce_fs,et_asd,cosmo) for z in Z])
 Sigma2_CE=np.array([Uncertainty(m1_SLY,m2_SLY,Lambda_SLY,dl_dM_SLY,z,1.,1.,ce_fs,ce_asd,cosmo) for z in Z])
-Sigma3_CE=np.array([Uncertainty(m1_MS1,m2_MS1,Lambda_MS1,dl_dM_MS1,z,1.,1.,ce_fs,ce_asd,cosmo) for z in Z])
+#Sigma3_CE=np.array([Uncertainty(m1_MS1,m2_MS1,Lambda_MS1,dl_dM_MS1,z,1.,1.,ce_fs,ce_asd,cosmo) for z in Z])
 
 ppl.ylabel(r'$\Delta$z/z')
 ppl.xlabel('Red shift')
-ppl.loglog(Z,Sigma1_CE,label='AP4')
-ppl.loglog(Z,Sigma2_CE,label='SLY')
+ppl.loglog(Z,Sigma1_ET,label='ET-D')
+ppl.loglog(Z,Sigma2_CE,label='CE')
 #ppl.loglog(Z,Sigma3,label='MS1')
 ppl.grid()
 ppl.legend()
